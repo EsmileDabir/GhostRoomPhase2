@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Rooms</title>
+</head>
+<body>
+  <h2>Welcome, <span id="user-name"></span></h2>
+
+  <p>Total rooms: <span id="total-rooms">0</span></p>
+
+  <!-- Admin create UI (only shown to admins) -->
+  <div id="admin-options" style="display:none; margin-bottom:12px;">
+    <input id="customRoomId" placeholder="Enter 6-digit Room ID" maxlength="6" />
+    <button id="create-btn">Create Room</button>
+  </div>
+
+  <hr />
+
+  <h3>Live Rooms</h3>
+  <ul id="live-rooms-list"></ul>
+
+  <!-- Leave Room Button -->
+  <div id="leave-options" style="display:none; margin-top:10px;">
+    <button id="leave-btn">Leave Room</button>
+  </div>
+
+<script>
+  // Show name
+  document.getElementById("user-name").textContent = sessionStorage.getItem("name") || "Guest";
+  const role = sessionStorage.getItem("role") || "student";
+
+  // Show admin controls if admin
+  if (role === "admin") {
+    document.getElementById("admin-options").style.display = "block";
+  }
+
+  // Helper: get rooms array (stored as objects) - support legacy string array too
+  function getRooms() {
+    let raw = localStorage.getItem("liveRooms") || "[]";
+    try {
+      const parsed = JSON.parse(raw);
+      // legacy: ["123456","654321"] => convert to objects with unknown admin
+      if (Array.isArray(parsed) && parsed.length && typeof parsed[0] === "string") {
+        return parsed.map(id => ({ roomId: id, admin: "Unknown" }));
+      }
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveRooms(arr) {
+    localStorage.setItem("liveRooms", JSON.stringify(arr));
+  }
+
+  const listEl = document.getElementById("live-rooms-list");
+  const totalRoomsEl = document.getElementById("total-rooms");
+
+  function renderRooms() {
+    const rooms = getRooms();
+    totalRoomsEl.textContent = rooms.length;
+    listEl.innerHTML = "";
+    if (rooms.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "No active rooms right now.";
+      listEl.appendChild(li);
+      return;
+    }
+
+    rooms.forEach((r, idx) => {
+      const li = document.createElement("li");
+      // Show a friendly label — do NOT show the secret roomId
+      li.innerHTML = `<strong>Private Room</strong> — created by <em>${escapeHtml(r.admin || "Admin")}</em>`;
+
+      // Join button: asks for ID then checks it against stored value
+      const joinBtn = document.createElement("button");
+      joinBtn.textContent = "Join";
+      joinBtn.style.marginLeft = "12px";
+      joinBtn.onclick = () => {
+        // Ask for ID from the student (confirmation)
+        const enteredId = prompt("Enter the 6-digit Room ID to join this room:");
+        if (!enteredId) return;
+        if (enteredId === r.roomId) {
+          // proceed: set session and redirect
+          sessionStorage.setItem("isCreator", "false");
+          sessionStorage.setItem("roomId", r.roomId);
+          sessionStorage.setItem("inRoom", "true");
+          window.location.href = `chat.html?room=${r.roomId}`;
+        } else {
+          alert("Invalid Room ID. You cannot join.");
+        }
+      };
+
+      li.appendChild(joinBtn);
+
+      // If current user is the admin of this room, show a "Open" or "Close" control
+      if (sessionStorage.getItem("name") === r.admin) {
+        const openBtn = document.createElement("button");
+        openBtn.textContent = "Open (as Admin)";
+        openBtn.style.marginLeft = "8px";
+        openBtn.onclick = () => {
+          sessionStorage.setItem("isCreator", "true");
+          sessionStorage.setItem("roomId", r.roomId);
+          sessionStorage.setItem("inRoom", "true");
+          // Admin should see the ID — show it once
+          alert("Your Room ID: " + r.roomId);
+          window.location.href = `chat.html?room=${r.roomId}`;
+        };
+
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close Room";
+        closeBtn.style.marginLeft = "6px";
+        closeBtn.onclick = () => {
+          // remove room from storage
+          let rooms = getRooms().filter(x => x.roomId !== r.roomId);
+          saveRooms(rooms);
+          renderRooms();
+          alert("Room closed for everyone.");
+        };
+
+        li.appendChild(openBtn);
+        li.appendChild(closeBtn);
+      }
+
+      listEl.appendChild(li);
+    });
+  }
+
+  // escapeHtml to avoid injection if admin name contains HTML
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"'`=\/]/g, s => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'
+    }[s]));
+  }
+
+  // Admin create: create a room object with admin's name and secret id
+  document.getElementById("create-btn").addEventListener("click", async () => {
+    const input = document.getElementById("customRoomId");
+    const roomId = input.value.trim();
+    
+    if (!/^\d{6}$/.test(roomId)) {
+        alert("Please enter a valid 6-digit Room ID.");
+        return;
+    }
+
+    // Call server to create room
+    const socket = io();
+    const username = sessionStorage.getItem("name") || "Admin";
+    
+    socket.emit("create-room", { 
+        roomId, 
+        username 
+    }, (response) => {
+        if (response.error) {
+            alert(response.error);
+        } else {
+            // Only proceed if server confirms room creation
+            const rooms = getRooms();
+            rooms.push({ 
+                roomId, 
+                admin: username,
+                createdAt: Date.now() 
+            });
+            saveRooms(rooms);
+            
+            sessionStorage.setItem("isCreator", "true");
+            sessionStorage.setItem("roomId", roomId);
+            window.location.href = `chat.html?room=${roomId}`;
+        }
+    });
+});
+
+  // Leave room behavior - if admin leaves, remove room
+  document.getElementById("leave-btn").addEventListener("click", () => {
+    const current = sessionStorage.getItem("roomId");
+    const isCreator = sessionStorage.getItem("isCreator") === "true";
+    if (isCreator && current) {
+      // remove room from list
+      let rooms = getRooms().filter(r => r.roomId !== current);
+      saveRooms(rooms);
+    }
+    sessionStorage.removeItem("roomId");
+    sessionStorage.removeItem("isCreator");
+    sessionStorage.removeItem("inRoom");
+    alert("Left room.");
+    renderRooms();
+  });
+
+  // Show leave button if in a room
+  if (sessionStorage.getItem("inRoom") === "true") {
+    document.getElementById("leave-options").style.display = "block";
+  }
+
+  // initial render
+  renderRooms();
+</script>
+</body>
+</html>

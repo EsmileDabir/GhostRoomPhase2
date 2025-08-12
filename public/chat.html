@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat Room</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 10px;
+      background: #f4f4f4;
+    }
+    #chat-box {
+      border: 1px solid #ccc;
+      background: white;
+      height: 300px;
+      overflow-y: scroll;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+    }
+    input, button {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+    }
+    #message {
+      width: 75%;
+    }
+    #sendBtn {
+      width: 20%;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #sendBtn:hover {
+      background: #45a049;
+    }
+    .system-message {
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <h2 id="room-title">Chat Room</h2>
+  <div id="chat-box"></div>
+
+  <input type="text" id="message" placeholder="Type a message..." autocomplete="off" />
+  <button id="sendBtn">Send</button>
+
+  <script>
+    // Initialize Socket
+    const socket = io({
+      reconnection: true,
+      reconnectionAttempts: 5
+    });
+
+    // DOM Elements
+    const chatBox = document.getElementById("chat-box");
+    const messageInput = document.getElementById("message");
+    const roomTitle = document.getElementById("room-title");
+
+    // Get user info
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get("room");
+    const username = sessionStorage.getItem("name") || "Anonymous";
+
+    // Update UI
+    roomTitle.textContent = `Room: ${roomId || 'Not Specified'}`;
+
+    // Socket Events
+    // Modify the join-room handler:
+socket.on("connect", () => {
+    console.log("✅ Connected with ID:", socket.id);
+    if (roomId) {
+        socket.emit("join-room", { 
+            room: roomId, 
+            name: username 
+        }, (response) => {
+            if (response?.error) {
+                appendSystemMessage(response.error);
+                // Show create button if room doesn't exist
+                if (response.error.includes("not found")) {
+                    const createBtn = document.createElement("button");
+                    createBtn.textContent = "Create This Room";
+                    createBtn.onclick = () => {
+                        socket.emit("create-room", {
+                            roomId: roomId,
+                            username: username
+                        });
+                    };
+                    chatBox.appendChild(createBtn);
+                }
+            }
+        });
+    }
+});
+
+    socket.on("connect_error", (err) => {
+      console.error("Connection error:", err);
+      appendSystemMessage("Connection error. Trying to reconnect...");
+    });
+
+    socket.on("receive-message", (data) => {
+      if (data?.name && data?.message) {
+        appendMessage(data.name, data.message, data.name === "System");
+      }
+    });
+
+    socket.on("chatHistory", (messages) => {
+      chatBox.innerHTML = "";
+      messages.forEach(msg => {
+        appendMessage(msg.username, msg.text);
+      });
+    });
+
+    socket.on("errorMessage", (error) => {
+      appendSystemMessage(error);
+    });
+
+    // Message Functions
+    function appendMessage(sender, text, isSystem = false) {
+      const msgElement = document.createElement("p");
+      if (isSystem) {
+        msgElement.className = "system-message";
+        msgElement.textContent = text;
+      } else {
+        msgElement.innerHTML = `<strong>${sender}:</strong> ${text}`;
+      }
+      chatBox.appendChild(msgElement);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function appendSystemMessage(text) {
+      appendMessage("System", text, true);
+    }
+
+    function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message || !roomId) return;
+      
+      socket.emit("send-message", { 
+        room: roomId, 
+        name: username, 
+        message 
+      }, (response) => {
+        if (response?.error) {
+          appendSystemMessage(response.error);
+        } else {
+          messageInput.value = "";
+        }
+      });
+    }
+
+    // Event Listeners
+    document.getElementById("sendBtn").addEventListener("click", sendMessage);
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    // Focus input on load
+    window.addEventListener("load", () => {
+      messageInput.focus();
+    });
+  </script>
+</body>
+</html>
