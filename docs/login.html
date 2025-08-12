@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <link rel="stylesheet" href="login.css" />
+</head>
+
+<body>
+<div class="mainbox">
+    <div class="box1">
+    <input type="text" id="name" placeholder="Enter your name" />
+
+    <div class="actions">
+      <select id="role">
+        <option class="std" value="student">Student</option>
+        <option class="admin" value="admin">Admin</option>
+      </select>
+      <button onclick="login()">Enter</button>
+    </div>
+
+    <!-- <div class="box2">
+      <img src="box2img.png" alt="">
+    </div> -->
+  </div>
+</div>
+
+
+
+  <script>
+    function login() {
+      const name = document.getElementById("name").value;
+      const role = document.getElementById("role").value;
+      sessionStorage.setItem("name", name);
+      sessionStorage.setItem("role", role);
+      window.location.href = "rooms.html";
+    }
+  </script>
+</body>
+</html>

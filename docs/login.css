@@ -1,0 +1,63 @@
+body {
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #FFE6C9;
+}
+
+/* Make the parent a flex container to align box2 and box1 side by side */
+.mainbox {
+  display: flex;
+  gap: 40px; /* space between the two boxes */
+  align-items: center; /* vertical center the boxes */
+}
+
+/* Adjust box2 size as needed */
+/* .box2 {
+  width: 620px;
+  height: 610px;
+} */
+
+/* box1 styles unchanged */
+.box1 {
+  width: 400px;
+  height: 500px;
+  border: 2px solid white;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;  
+  align-items: center;      
+  gap: 20px;                
+  padding: 20px;
+  box-sizing: border-box;
+
+  background-color: white;
+  box-shadow: 2px 6px 10px white;
+}
+
+/* rest styles unchanged */
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+input {
+  width: 100%;
+  max-width: 300px;
+  padding: 8px 12px;
+  font-size: 16px;
+}
+
+select {
+  padding: 8px 12px;
+  font-size: 16px;
+}
+
+button {
+  padding: 8px 16px;
+  font-size: 16px;
+  cursor: pointer;
+}
